@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-brown: #3E2723;
+  --color-brand-gold:  #D4A24C;
+  --color-brand-cream: #FFF8E7;
+  --color-brand-red:   #C8102E;
+}
+
+/* Base resets */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: #FFF8E7;
+  color: #3E2723;
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* Remove number input spinners — we have our own +/- buttons */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
