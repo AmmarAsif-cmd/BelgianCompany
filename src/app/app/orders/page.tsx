@@ -40,10 +40,14 @@ export default function OrdersPage() {
   const [counts,  setCounts]  = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
 
+  // Current tab filters
+  const [filterSupplier, setFilterSupplier] = useState('')
+
   // History tab state
   const [savedOrders,    setSavedOrders]    = useState<SavedOrder[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [deleteTarget,   setDeleteTarget]   = useState<SavedOrder | null>(null)
+  const [historyFilter,  setHistoryFilter]  = useState('')
 
   // Load current week data
   useEffect(() => {
@@ -74,10 +78,19 @@ export default function OrdersPage() {
       .finally(() => setHistoryLoading(false))
   }, [tab, store.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // All unique suppliers from low items (for filter dropdown)
+  const lowSuppliers = useMemo(() => {
+    const seen = new Map<string, string>()
+    items
+      .filter((i) => counts[i.id] !== undefined && counts[i.id] <= i.min_stock)
+      .forEach((i) => seen.set(i.suppliers.id, i.suppliers.name))
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }))
+  }, [items, counts])
+
   // Group low items by supplier
   const lowBySupplier = useMemo(() => {
     const low: OrderItem[] = items
-      .filter((i) => counts[i.id] !== undefined && counts[i.id] <= i.min_stock)
+      .filter((i) => counts[i.id] !== undefined && counts[i.id] <= i.min_stock && (!filterSupplier || i.suppliers.id === filterSupplier))
       .map((i) => ({
         item: i,
         currentCount: counts[i.id],
@@ -155,15 +168,24 @@ export default function OrdersPage() {
     }
   }
 
+  // Unique suppliers in saved orders (for history filter)
+  const historySuppliers = useMemo(() => {
+    const seen = new Map<string, string>()
+    savedOrders.forEach((o) => { if (o.supplier_id) seen.set(o.supplier_id, o.supplier_name) })
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }))
+  }, [savedOrders])
+
   // Group saved orders by week for history view
   const historyByWeek = useMemo(() => {
     const map = new Map<string, SavedOrder[]>()
-    savedOrders.forEach((o) => {
-      if (!map.has(o.week_start)) map.set(o.week_start, [])
-      map.get(o.week_start)!.push(o)
-    })
+    savedOrders
+      .filter((o) => !historyFilter || o.supplier_id === historyFilter)
+      .forEach((o) => {
+        if (!map.has(o.week_start)) map.set(o.week_start, [])
+        map.get(o.week_start)!.push(o)
+      })
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
-  }, [savedOrders])
+  }, [savedOrders, historyFilter])
 
   const currentMonday = getMondayOfWeek()
 
@@ -191,7 +213,19 @@ export default function OrdersPage() {
       {/* ── CURRENT TAB ── */}
       {tab === 'current' && (
         <>
-          <p className="text-xs text-[#3E2723]/45">Week of {weekStart} · items at or below minimum</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-xs text-[#3E2723]/45 flex-1">Week of {weekStart} · items at or below minimum</p>
+            {lowSuppliers.length > 1 && (
+              <select
+                value={filterSupplier}
+                onChange={(e) => setFilterSupplier(e.target.value)}
+                className="rounded-xl border border-[#3E2723]/20 bg-white px-3 py-1.5 text-xs text-[#3E2723] focus:outline-none focus:ring-2 focus:ring-[#D4A24C]"
+              >
+                <option value="">All suppliers</option>
+                {lowSuppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            )}
+          </div>
 
           {loading ? (
             <div className="flex justify-center py-16">
@@ -243,6 +277,16 @@ export default function OrdersPage() {
       {/* ── HISTORY TAB ── */}
       {tab === 'history' && (
         <>
+          {historySuppliers.length > 1 && !historyLoading && (
+            <select
+              value={historyFilter}
+              onChange={(e) => setHistoryFilter(e.target.value)}
+              className="self-start rounded-xl border border-[#3E2723]/20 bg-white px-3 py-1.5 text-xs text-[#3E2723] focus:outline-none focus:ring-2 focus:ring-[#D4A24C]"
+            >
+              <option value="">All suppliers</option>
+              {historySuppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          )}
           {historyLoading ? (
             <div className="flex justify-center py-16">
               <div className="animate-spin rounded-full w-8 h-8 border-2 border-[#D4A24C] border-t-transparent" />

@@ -2,14 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ClipboardList, ShoppingCart, BarChart2, Settings } from 'lucide-react'
+import { ClipboardList, ShoppingCart, BarChart2, Settings, Archive } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
 const tabs = [
-  { href: '/app/count',     label: 'Count',     icon: ClipboardList },
-  { href: '/app/orders',    label: 'Orders',    icon: ShoppingCart  },
-  { href: '/app/dashboard', label: 'Dashboard', icon: BarChart2     },
-  { href: '/app/admin',     label: 'Admin',     icon: Settings      },
+  { href: '/app/count',     label: 'Count',   icon: ClipboardList },
+  { href: '/app/orders',    label: 'Orders',  icon: ShoppingCart  },
+  { href: '/app/stock',     label: 'Stock',   icon: Archive       },
+  { href: '/app/dashboard', label: 'Stats',   icon: BarChart2     },
+  { href: '/app/admin',     label: 'Admin',   icon: Settings      },
 ]
 
 export function BottomTabs() {

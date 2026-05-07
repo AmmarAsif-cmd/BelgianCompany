@@ -32,7 +32,7 @@ export default async function StorePickerPage() {
       {/* Logo / header */}
       <div className="mb-10 text-center">
         <div className="text-5xl mb-3">🧇</div>
-        <h1 className="text-2xl font-bold text-[#3E2723]">Belgian Waffle Co.</h1>
+        <h1 className="text-2xl font-bold text-[#3E2723]">The Belgian Waffle Company</h1>
         <p className="text-[#3E2723]/60 mt-1 text-sm">Weekly Stock Tracker</p>
       </div>
 

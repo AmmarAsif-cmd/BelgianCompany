@@ -28,7 +28,7 @@ export function BrandHeader({ weekLabel }: BrandHeaderProps) {
     >
       <div className="flex flex-col">
         <span className="text-[#FFF8E7] font-bold text-base leading-tight tracking-tight">
-          🧇 Belgian Waffle Co.
+          🧇 The Belgian Waffle Company
         </span>
         <span className="text-[#FFF8E7]/75 text-xs leading-tight">
           {store.name} · {weekLabel}
