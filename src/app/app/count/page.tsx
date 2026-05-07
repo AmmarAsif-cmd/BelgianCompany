@@ -22,6 +22,7 @@ export default function CountPage() {
   const [items,      setItems]      = useState<ItemWithSupplier[]>([])
   const [counts,     setCounts]     = useState<Record<string, number>>({})
   const [search,     setSearch]     = useState('')
+  const [filterSup,  setFilterSup]  = useState('')
   const [countedBy,  setCountedBy]  = useState('')
   const [loading,    setLoading]    = useState(true)
 
@@ -75,11 +76,19 @@ export default function CountPage() {
     [store.id, weekStart, countedBy]
   )
 
+  // Unique suppliers for the filter dropdown
+  const suppliers = useMemo(() => {
+    const seen = new Map<string, string>()
+    items.forEach((i) => seen.set(i.suppliers.id, i.suppliers.name))
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }))
+  }, [items])
+
   // Group filtered items by supplier, preserving display_order
   const grouped = useMemo(() => {
     const term = search.toLowerCase()
     const filtered = items.filter((i) =>
-      !term || i.name.toLowerCase().includes(term) || i.category.toLowerCase().includes(term)
+      (!filterSup || i.suppliers.id === filterSup) &&
+      (!term || i.name.toLowerCase().includes(term) || i.category.toLowerCase().includes(term))
     )
 
     const map = new Map<string, { displayOrder: number; items: ItemWithSupplier[] }>()
@@ -126,16 +135,26 @@ export default function CountPage() {
         )}
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3E2723]/40 pointer-events-none" />
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search items…"
-          className="w-full rounded-xl border border-[#3E2723]/20 bg-white pl-9 pr-4 py-2.5 text-sm text-[#3E2723] placeholder:text-[#3E2723]/35 focus:outline-none focus:ring-2 focus:ring-[#D4A24C]"
-        />
+      {/* Filters row */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3E2723]/40 pointer-events-none" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search items…"
+            className="w-full rounded-xl border border-[#3E2723]/20 bg-white pl-9 pr-4 py-2.5 text-sm text-[#3E2723] placeholder:text-[#3E2723]/35 focus:outline-none focus:ring-2 focus:ring-[#D4A24C]"
+          />
+        </div>
+        <select
+          value={filterSup}
+          onChange={(e) => setFilterSup(e.target.value)}
+          className="rounded-xl border border-[#3E2723]/20 bg-white px-3 py-2.5 text-sm text-[#3E2723] focus:outline-none focus:ring-2 focus:ring-[#D4A24C] shrink-0"
+        >
+          <option value="">All suppliers</option>
+          {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
       </div>
 
       {/* Item groups */}

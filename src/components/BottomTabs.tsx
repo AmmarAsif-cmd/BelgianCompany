@@ -2,13 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ClipboardList, ShoppingCart, BarChart2 } from 'lucide-react'
+import { ClipboardList, ShoppingCart, BarChart2, Settings, Archive } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
 const tabs = [
-  { href: '/app/count',     label: 'Count',     icon: ClipboardList },
-  { href: '/app/orders',    label: 'Orders',    icon: ShoppingCart  },
-  { href: '/app/dashboard', label: 'Dashboard', icon: BarChart2     },
+  { href: '/app/count',     label: 'Count',   icon: ClipboardList },
+  { href: '/app/orders',    label: 'Orders',  icon: ShoppingCart  },
+  { href: '/app/stock',     label: 'Stock',   icon: Archive       },
+  { href: '/app/dashboard', label: 'Stats',   icon: BarChart2     },
+  { href: '/app/admin',     label: 'Admin',   icon: Settings      },
 ]
 
 export function BottomTabs() {
@@ -25,20 +27,18 @@ export function BottomTabs() {
               key={href}
               href={href}
               className={cn(
-                'flex flex-1 flex-col items-center gap-1 py-2 text-xs transition-colors',
-                active
-                  ? 'text-[#D4A24C] font-semibold'
-                  : 'text-[#3E2723]/50 hover:text-[#3E2723]'
+                'flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] transition-colors',
+                active ? 'text-[#D4A24C] font-semibold' : 'text-[#3E2723]/50 hover:text-[#3E2723]'
               )}
             >
-              <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
+              <Icon size={21} strokeWidth={active ? 2.5 : 1.8} />
               {label}
             </Link>
           )
         })}
       </nav>
 
-      {/* Desktop top nav (hidden on mobile) */}
+      {/* Desktop top nav */}
       <nav className="hidden md:flex border-b border-[#3E2723]/15 bg-[#FFF8E7]">
         <div className="mx-auto flex max-w-4xl w-full px-4">
           {tabs.map(({ href, label, icon: Icon }) => {

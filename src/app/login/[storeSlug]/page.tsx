@@ -66,7 +66,7 @@ export default function LoginPage() {
         </Link>
         <div>
           <div className="text-white font-bold text-lg leading-tight">
-            🧇 {storeName}
+            🧇 The Belgian Waffle Company — {storeName}
           </div>
           <div className="text-white/70 text-xs">Enter your store PIN to continue</div>
         </div>

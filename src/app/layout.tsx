@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Belgian Waffle Co. — Stock Tracker',
-  description: 'Weekly stock counting app for Belgian Waffle Co. stores',
+  title: 'The Belgian Waffle Company — Stock Tracker',
+  description: 'Weekly stock counting app for The Belgian Waffle Company stores',
   manifest: '/manifest.json',
 }
 
