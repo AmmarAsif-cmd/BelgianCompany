@@ -13,21 +13,18 @@ export default async function StorePickerPage() {
     redirect('/app/count')
   }
 
-  let stores: Awaited<ReturnType<typeof getStores>> = []
+  const STATIC_STORES = [
+    { id: '', name: 'Stockport Road', slug: 'stockport-road', brand_color: '#5D4037', pin: '', created_at: '' },
+    { id: '', name: 'Sale',           slug: 'sale',           brand_color: '#8B5A3C', pin: '', created_at: '' },
+  ]
+
+  let stores: Awaited<ReturnType<typeof getStores>> = STATIC_STORES
   try {
-    // Use a non-authed fetch just to read public store metadata for the landing page.
-    // We fetch directly from Supabase before RLS kicks in by using anon key SELECT only.
-    // This works because our "stores_select" policy allows any authenticated user;
-    // for the landing page we call the server client which still uses the anon role —
-    // Supabase allows anon reads if we explicitly open them up, but we haven't done that.
-    // Simpler: hard-code the two stores so the landing page works without a DB call.
-    stores = await getStores(supabase)
+    const fetched = await getStores(supabase)
+    // RLS silently returns [] for unauthenticated requests — fall back to static list
+    if (fetched.length > 0) stores = fetched
   } catch {
-    // If the DB isn't connected yet (e.g. no env vars), fall back to static data
-    stores = [
-      { id: '', name: 'Stockport Road', slug: 'stockport-road', brand_color: '#5D4037', pin: '', created_at: '' },
-      { id: '', name: 'Sale',           slug: 'sale',           brand_color: '#8B5A3C', pin: '', created_at: '' },
-    ]
+    // env vars not set yet — static fallback already assigned above
   }
 
   return (
