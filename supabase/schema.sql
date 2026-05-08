@@ -58,6 +58,10 @@ ALTER TABLE counts    ENABLE ROW LEVEL SECURITY;
 
 -- Reference data is readable by any authenticated session
 CREATE POLICY "stores_select"    ON stores    FOR SELECT TO authenticated USING (true);
+
+-- Pre-auth PIN login: unauthenticated users must be able to read store rows by slug.
+-- PIN is still verified in server action; this only exposes the same directory data as the home page.
+CREATE POLICY "stores_select_anon" ON stores FOR SELECT TO anon USING (true);
 CREATE POLICY "suppliers_select" ON suppliers FOR SELECT TO authenticated USING (true);
 CREATE POLICY "items_select"     ON items     FOR SELECT TO authenticated USING (true);
 

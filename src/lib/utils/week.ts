@@ -21,6 +21,15 @@ export function toISODate(date: Date): string {
 }
 
 /**
+ * Normalizes any ISO-like date string to that week's Monday (UTC).
+ */
+export function normalizeWeekStartISO(input: string): string {
+  const d = new Date(`${input}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) return toISODate(getMondayOfWeek())
+  return toISODate(getMondayOfWeek(d))
+}
+
+/**
  * Returns a human-readable week label, e.g. "w/c 5 May" or "This week".
  */
 export function formatWeekLabel(monday: Date, currentMonday: Date): string {
@@ -36,6 +45,20 @@ export function formatWeekLabel(monday: Date, currentMonday: Date): string {
   const day   = monday.getUTCDate()
   const month = monday.toLocaleString('en-GB', { month: 'short', timeZone: 'UTC' })
   return `w/c ${day} ${month}`
+}
+
+/**
+ * Formats an ISO date string (YYYY-MM-DD) for UI display.
+ * Example: "2026-05-04" -> "04 May 2026".
+ */
+export function formatISODate(isoDate: string): string {
+  const d = new Date(`${isoDate}T00:00:00Z`)
+  return d.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
 }
 
 /**

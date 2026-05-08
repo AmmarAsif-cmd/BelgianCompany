@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { normalizeWeekStartISO } from '@/lib/utils/week'
 
 export type SavedOrderItem = {
   item_id: string
@@ -38,10 +39,11 @@ export async function upsertSavedOrder(
   supabase: SupabaseClient<any>,
   params: Omit<SavedOrder, 'id' | 'created_at' | 'updated_at'>
 ): Promise<void> {
+  const weekStart = normalizeWeekStartISO(params.week_start)
   const { error } = await supabase
     .from('saved_orders')
     .upsert(
-      { ...params, updated_at: new Date().toISOString() },
+      { ...params, week_start: weekStart, updated_at: new Date().toISOString() },
       { onConflict: 'store_id,supplier_id,week_start' }
     )
   if (error) throw error

@@ -29,17 +29,23 @@ export default function AdminSuppliersPage() {
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase
-      .from('suppliers')
-      .select('*, items(count)')
-      .order('display_order')
+    try {
+      const { data, error } = await supabase
+        .from('suppliers')
+        .select('*, items(count)')
+        .order('display_order')
+      if (error) throw error
 
-    const rows: SupplierWithCount[] = (data ?? []).map((s: any) => ({
-      ...s,
-      item_count: s.items?.[0]?.count ?? 0,
-    }))
-    setSuppliers(rows)
-    setLoading(false)
+      const rows: SupplierWithCount[] = (data ?? []).map((s: any) => ({
+        ...s,
+        item_count: s.items?.[0]?.count ?? 0,
+      }))
+      setSuppliers(rows)
+    } catch (e: any) {
+      addToast(e.message ?? 'Could not load suppliers', 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -57,16 +63,26 @@ export default function AdminSuppliersPage() {
   }
 
   async function handleSave() {
-    if (!name.trim()) return
+    const nextName = name.trim()
+    if (!nextName) return
+    const duplicate = suppliers.some(
+      (s) =>
+        s.id !== editTarget?.id &&
+        s.name.trim().toLowerCase() === nextName.toLowerCase()
+    )
+    if (duplicate) {
+      addToast('Supplier already exists. Use a unique name.', 'error')
+      return
+    }
     setSaving(true)
     try {
       if (editTarget) {
-        const { error } = await supabase.from('suppliers').update({ name: name.trim() }).eq('id', editTarget.id)
+        const { error } = await supabase.from('suppliers').update({ name: nextName }).eq('id', editTarget.id)
         if (error) throw error
         addToast('Supplier updated')
       } else {
         const maxOrder = suppliers.length ? Math.max(...suppliers.map((s) => s.display_order)) : 0
-        const { error } = await supabase.from('suppliers').insert({ name: name.trim(), display_order: maxOrder + 1 })
+        const { error } = await supabase.from('suppliers').insert({ name: nextName, display_order: maxOrder + 1 })
         if (error) throw error
         addToast('Supplier added')
       }
@@ -107,11 +123,17 @@ export default function AdminSuppliersPage() {
     const a = suppliers[index]
     const b = suppliers[swapIndex]
 
-    await Promise.all([
-      supabase.from('suppliers').update({ display_order: b.display_order }).eq('id', a.id),
-      supabase.from('suppliers').update({ display_order: a.display_order }).eq('id', b.id),
-    ])
-    await load()
+    try {
+      const [aUpdate, bUpdate] = await Promise.all([
+        supabase.from('suppliers').update({ display_order: b.display_order }).eq('id', a.id),
+        supabase.from('suppliers').update({ display_order: a.display_order }).eq('id', b.id),
+      ])
+      if (aUpdate.error) throw aUpdate.error
+      if (bUpdate.error) throw bUpdate.error
+      await load()
+    } catch (e: any) {
+      addToast(e.message ?? 'Could not reorder suppliers', 'error')
+    }
   }
 
   return (

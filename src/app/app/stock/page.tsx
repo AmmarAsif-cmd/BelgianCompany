@@ -7,7 +7,7 @@ import { WeekPicker } from '@/components/WeekPicker'
 import { createClient } from '@/lib/supabase/client'
 import { getActiveItemsWithSuppliers } from '@/lib/db/items'
 import { getCountsForWeek } from '@/lib/db/counts'
-import { getMondayOfWeek, toISODate } from '@/lib/utils/week'
+import { formatISODate, getMondayOfWeek, toISODate } from '@/lib/utils/week'
 import type { ItemWithSupplier } from '@/types/db'
 
 export default function StockPage() {
@@ -20,6 +20,8 @@ export default function StockPage() {
   const [loading,   setLoading]   = useState(true)
   const [search,    setSearch]    = useState('')
   const [filterSup, setFilterSup] = useState('')
+
+  const normalizeSupplierName = (name: string) => name.trim().toLowerCase()
 
   // Fetch items once
   useEffect(() => {
@@ -46,7 +48,10 @@ export default function StockPage() {
   // Unique suppliers for dropdown
   const suppliers = useMemo(() => {
     const seen = new Map<string, string>()
-    items.forEach((i) => seen.set(i.suppliers.id, i.suppliers.name))
+    items.forEach((i) => {
+      const normalized = normalizeSupplierName(i.suppliers.name)
+      if (!seen.has(normalized)) seen.set(normalized, i.suppliers.name.trim())
+    })
     return Array.from(seen.entries()).map(([id, name]) => ({ id, name }))
   }, [items])
 
@@ -54,27 +59,31 @@ export default function StockPage() {
   const grouped = useMemo(() => {
     const term = search.toLowerCase()
     const filtered = items.filter((i) =>
-      (!filterSup || i.suppliers.id === filterSup) &&
+      (!filterSup || normalizeSupplierName(i.suppliers.name) === filterSup) &&
       (!term || i.name.toLowerCase().includes(term) || i.category.toLowerCase().includes(term))
     )
 
-    const map = new Map<string, { displayOrder: number; supplierId: string; items: ItemWithSupplier[] }>()
+    const map = new Map<string, { displayOrder: number; name: string; items: ItemWithSupplier[] }>()
     filtered.forEach((item) => {
       const sup = item.suppliers
-      if (!map.has(sup.name)) map.set(sup.name, { displayOrder: sup.display_order, supplierId: sup.id, items: [] })
-      map.get(sup.name)!.items.push(item)
+      const normalized = normalizeSupplierName(sup.name)
+      if (!map.has(normalized)) {
+        map.set(normalized, { displayOrder: sup.display_order, name: sup.name.trim(), items: [] })
+      }
+      map.get(normalized)!.items.push(item)
     })
 
     return Array.from(map.entries())
       .sort((a, b) => a[1].displayOrder - b[1].displayOrder)
-      .map(([name, { items }]) => ({ name, items }))
+      .map(([id, { name, items }]) => ({ id, name, items }))
   }, [items, search, filterSup])
 
   // Stats
   const stats = useMemo(() => {
+    const term = search.toLowerCase()
     const visible = items.filter((i) =>
-      (!filterSup || i.suppliers.id === filterSup) &&
-      (!search || i.name.toLowerCase().includes(search.toLowerCase()))
+      (!filterSup || normalizeSupplierName(i.suppliers.name) === filterSup) &&
+      (!term || i.name.toLowerCase().includes(term) || i.category.toLowerCase().includes(term))
     )
     const counted  = visible.filter((i) => counts[i.id] !== undefined).length
     const low      = visible.filter((i) => counts[i.id] !== undefined && counts[i.id] <= i.min_stock).length
@@ -91,7 +100,10 @@ export default function StockPage() {
       </div>
 
       {/* Week picker */}
-      <WeekPicker value={weekStart} onChange={setWeekStart} />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <WeekPicker value={weekStart} onChange={setWeekStart} />
+        <p className="text-xs text-[#3E2723]/45">Week of {formatISODate(weekStart)}</p>
+      </div>
 
       {/* Stats bar */}
       {!loading && (
@@ -135,6 +147,18 @@ export default function StockPage() {
           <option value="">All suppliers</option>
           {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
+        {(search || filterSup) && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearch('')
+              setFilterSup('')
+            }}
+            className="rounded-xl border border-[#3E2723]/20 bg-white px-3 py-2.5 text-sm text-[#3E2723]/70 hover:bg-[#3E2723]/5"
+          >
+            Reset
+          </button>
+        )}
       </div>
 
       {/* Stock list */}
@@ -149,10 +173,10 @@ export default function StockPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          {grouped.map(({ name, items: groupItems }) => {
+          {grouped.map(({ id, name, items: groupItems }) => {
             const groupLow = groupItems.filter((i) => counts[i.id] !== undefined && counts[i.id] <= i.min_stock).length
             return (
-              <div key={name} className="rounded-2xl overflow-hidden border border-[#3E2723]/10 bg-white shadow-sm">
+              <div key={id} className="rounded-2xl overflow-hidden border border-[#3E2723]/10 bg-white shadow-sm">
                 {/* Supplier header */}
                 <div className="flex items-center justify-between px-4 py-2.5 bg-[#3E2723]">
                   <span className="text-[#FFF8E7] font-semibold text-sm">{name}</span>

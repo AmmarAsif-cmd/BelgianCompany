@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Count } from '@/types/db'
+import { normalizeWeekStartISO } from '@/lib/utils/week'
 
 export async function getCountsForWeek(
   supabase: SupabaseClient<any>,
@@ -26,11 +27,12 @@ export async function upsertCount(
     counted_by?: string | null
   }
 ): Promise<void> {
+  const weekStart = normalizeWeekStartISO(params.week_start)
   const { error } = await supabase.from('counts').upsert(
     {
       store_id:   params.store_id,
       item_id:    params.item_id,
-      week_start: params.week_start,
+      week_start: weekStart,
       quantity:   params.quantity,
       counted_by: params.counted_by ?? null,
       counted_at: new Date().toISOString(),

@@ -11,7 +11,7 @@ import { getActiveItemsWithSuppliers } from '@/lib/db/items'
 import { getCountsForWeek } from '@/lib/db/counts'
 import { getSavedOrders, upsertSavedOrder, updateSavedOrderStatus, deleteSavedOrder } from '@/lib/db/saved_orders'
 import type { SavedOrder, SavedOrderItem } from '@/lib/db/saved_orders'
-import { getMondayOfWeek, toISODate, formatWeekLabel } from '@/lib/utils/week'
+import { getMondayOfWeek, toISODate, formatWeekLabel, formatISODate } from '@/lib/utils/week'
 import type { ItemWithSupplier } from '@/types/db'
 
 type Tab = 'current' | 'history'
@@ -24,7 +24,7 @@ type OrderItem = {
 
 function formatOrderText(storeName: string, supplierName: string, weekStart: string, items: SavedOrderItem[]) {
   const lines = items.map((i) => `• ${i.item_name} — have ${i.current_stock}, order ${i.order_qty}`)
-  return [`📦 Order for ${supplierName} (${storeName})`, `Week of ${weekStart}`, '', ...lines].join('\n')
+  return [`📦 Order for ${supplierName} (${storeName})`, `Week of ${formatISODate(weekStart)}`, '', ...lines].join('\n')
 }
 
 export default function OrdersPage() {
@@ -32,7 +32,7 @@ export default function OrdersPage() {
   const supabase = createClient()
   const { toasts, addToast, dismissToast } = useToast()
 
-  const weekStart = toISODate(getMondayOfWeek())
+  const [weekStart] = useState(() => toISODate(getMondayOfWeek()))
   const [tab, setTab] = useState<Tab>('current')
 
   // Current tab state
@@ -48,6 +48,8 @@ export default function OrdersPage() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [deleteTarget,   setDeleteTarget]   = useState<SavedOrder | null>(null)
   const [historyFilter,  setHistoryFilter]  = useState('')
+  const [historyWeekFilter, setHistoryWeekFilter] = useState('')
+  const normalizeSupplierName = (name: string) => name.trim().toLowerCase()
 
   // Load current week data
   useEffect(() => {
@@ -80,33 +82,41 @@ export default function OrdersPage() {
 
   // All unique suppliers from low items (for filter dropdown)
   const lowSuppliers = useMemo(() => {
-    const seen = new Map<string, string>()
+    const seen = new Map<string, { id: string; name: string }>()
     items
       .filter((i) => counts[i.id] !== undefined && counts[i.id] <= i.min_stock)
-      .forEach((i) => seen.set(i.suppliers.id, i.suppliers.name))
-    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }))
-  }, [items, counts])
+      .forEach((i) => {
+        const normalized = normalizeSupplierName(i.suppliers.name)
+        if (!seen.has(normalized)) {
+          seen.set(normalized, { id: normalized, name: i.suppliers.name.trim() })
+        }
+      })
+    return Array.from(seen.values())
+  }, [items, counts, filterSupplier])
 
   // Group low items by supplier
   const lowBySupplier = useMemo(() => {
     const low: OrderItem[] = items
-      .filter((i) => counts[i.id] !== undefined && counts[i.id] <= i.min_stock && (!filterSupplier || i.suppliers.id === filterSupplier))
+      .filter((i) => counts[i.id] !== undefined && counts[i.id] <= i.min_stock && (!filterSupplier || normalizeSupplierName(i.suppliers.name) === filterSupplier))
       .map((i) => ({
         item: i,
         currentCount: counts[i.id],
         suggestedOrder: Math.max(i.min_stock * 2 - counts[i.id], 1),
       }))
 
-    const map = new Map<string, { supplierId: string; displayOrder: number; orderItems: OrderItem[] }>()
+    const map = new Map<string, { supplierId: string; name: string; displayOrder: number; orderItems: OrderItem[] }>()
     low.forEach((oi) => {
       const sup = oi.item.suppliers
-      if (!map.has(sup.name)) map.set(sup.name, { supplierId: sup.id, displayOrder: sup.display_order, orderItems: [] })
-      map.get(sup.name)!.orderItems.push(oi)
+      const normalized = normalizeSupplierName(sup.name)
+      if (!map.has(normalized)) {
+        map.set(normalized, { supplierId: sup.id, name: sup.name.trim(), displayOrder: sup.display_order, orderItems: [] })
+      }
+      map.get(normalized)!.orderItems.push(oi)
     })
     return Array.from(map.entries())
       .sort((a, b) => a[1].displayOrder - b[1].displayOrder)
-      .map(([name, { supplierId, orderItems }]) => ({ name, supplierId, orderItems }))
-  }, [items, counts])
+      .map(([id, { supplierId, name, orderItems }]) => ({ id, name, supplierId, orderItems }))
+  }, [items, counts, filterSupplier])
 
   async function copyOrder(supplierName: string, orderItems: OrderItem[] | SavedOrderItem[], storeName = store.name, week = weekStart) {
     const lines = (orderItems as any[]).map((oi) =>
@@ -114,7 +124,7 @@ export default function OrdersPage() {
         ? `• ${oi.item.name} — have ${oi.currentCount}, order ${oi.suggestedOrder}`
         : `• ${oi.item_name} — have ${oi.current_stock}, order ${oi.order_qty}`
     )
-    const text = [`📦 Order for ${supplierName} (${storeName})`, `Week of ${week}`, '', ...lines].join('\n')
+    const text = [`📦 Order for ${supplierName} (${storeName})`, `Week of ${formatISODate(week)}`, '', ...lines].join('\n')
     try {
       await navigator.clipboard.writeText(text)
       addToast('Order copied — paste into WhatsApp', 'success')
@@ -175,17 +185,22 @@ export default function OrdersPage() {
     return Array.from(seen.entries()).map(([id, name]) => ({ id, name }))
   }, [savedOrders])
 
+  const historyWeeks = useMemo(
+    () => Array.from(new Set(savedOrders.map((o) => o.week_start))).sort((a, b) => b.localeCompare(a)),
+    [savedOrders]
+  )
+
   // Group saved orders by week for history view
   const historyByWeek = useMemo(() => {
     const map = new Map<string, SavedOrder[]>()
     savedOrders
-      .filter((o) => !historyFilter || o.supplier_id === historyFilter)
+      .filter((o) => (!historyFilter || o.supplier_id === historyFilter) && (!historyWeekFilter || o.week_start === historyWeekFilter))
       .forEach((o) => {
         if (!map.has(o.week_start)) map.set(o.week_start, [])
         map.get(o.week_start)!.push(o)
       })
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
-  }, [savedOrders, historyFilter])
+  }, [savedOrders, historyFilter, historyWeekFilter])
 
   const currentMonday = getMondayOfWeek()
 
@@ -214,7 +229,7 @@ export default function OrdersPage() {
       {tab === 'current' && (
         <>
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-xs text-[#3E2723]/45 flex-1">Week of {weekStart} · items at or below minimum</p>
+            <p className="text-xs text-[#3E2723]/45 flex-1">Week of {formatISODate(weekStart)} · items at or below minimum</p>
             {lowSuppliers.length > 1 && (
               <select
                 value={filterSupplier}
@@ -224,6 +239,15 @@ export default function OrdersPage() {
                 <option value="">All suppliers</option>
                 {lowSuppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+            )}
+            {filterSupplier && (
+              <button
+                type="button"
+                onClick={() => setFilterSupplier('')}
+                className="rounded-xl border border-[#3E2723]/20 bg-white px-3 py-1.5 text-xs text-[#3E2723]/70 hover:bg-[#3E2723]/5"
+              >
+                Reset supplier
+              </button>
             )}
           </div>
 
@@ -239,8 +263,8 @@ export default function OrdersPage() {
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              {lowBySupplier.map(({ name, supplierId, orderItems }) => (
-                <div key={name} className="rounded-2xl overflow-hidden border border-[#3E2723]/10 bg-white shadow-sm">
+              {lowBySupplier.map(({ id, name, supplierId, orderItems }) => (
+                <div key={id} className="rounded-2xl overflow-hidden border border-[#3E2723]/10 bg-white shadow-sm">
                   <div className="flex items-center justify-between px-4 py-3 bg-[#3E2723]">
                     <div>
                       <span className="text-[#FFF8E7] font-semibold text-sm">{name}</span>
@@ -277,15 +301,41 @@ export default function OrdersPage() {
       {/* ── HISTORY TAB ── */}
       {tab === 'history' && (
         <>
-          {historySuppliers.length > 1 && !historyLoading && (
-            <select
-              value={historyFilter}
-              onChange={(e) => setHistoryFilter(e.target.value)}
-              className="self-start rounded-xl border border-[#3E2723]/20 bg-white px-3 py-1.5 text-xs text-[#3E2723] focus:outline-none focus:ring-2 focus:ring-[#D4A24C]"
-            >
-              <option value="">All suppliers</option>
-              {historySuppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+          {!historyLoading && (historySuppliers.length > 1 || historyWeeks.length > 1) && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {historySuppliers.length > 1 && (
+                <select
+                  value={historyFilter}
+                  onChange={(e) => setHistoryFilter(e.target.value)}
+                  className="rounded-xl border border-[#3E2723]/20 bg-white px-3 py-1.5 text-xs text-[#3E2723] focus:outline-none focus:ring-2 focus:ring-[#D4A24C]"
+                >
+                  <option value="">All suppliers</option>
+                  {historySuppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              )}
+              {historyWeeks.length > 1 && (
+                <select
+                  value={historyWeekFilter}
+                  onChange={(e) => setHistoryWeekFilter(e.target.value)}
+                  className="rounded-xl border border-[#3E2723]/20 bg-white px-3 py-1.5 text-xs text-[#3E2723] focus:outline-none focus:ring-2 focus:ring-[#D4A24C]"
+                >
+                  <option value="">All weeks</option>
+                  {historyWeeks.map((week) => <option key={week} value={week}>{formatISODate(week)}</option>)}
+                </select>
+              )}
+              {(historyFilter || historyWeekFilter) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHistoryFilter('')
+                    setHistoryWeekFilter('')
+                  }}
+                  className="rounded-xl border border-[#3E2723]/20 bg-white px-3 py-1.5 text-xs text-[#3E2723]/70 hover:bg-[#3E2723]/5"
+                >
+                  Reset filters
+                </button>
+              )}
+            </div>
           )}
           {historyLoading ? (
             <div className="flex justify-center py-16">
@@ -304,7 +354,7 @@ export default function OrdersPage() {
                 const label = formatWeekLabel(weekDate, currentMonday)
                 return (
                   <div key={week}>
-                    <p className="text-xs font-bold text-[#3E2723]/40 uppercase tracking-wide mb-2">{label} · {week}</p>
+                    <p className="text-xs font-bold text-[#3E2723]/40 uppercase tracking-wide mb-2">{label} · {formatISODate(week)}</p>
                     <div className="flex flex-col gap-3">
                       {orders.map((order) => (
                         <div key={order.id} className="rounded-2xl overflow-hidden border border-[#3E2723]/10 bg-white shadow-sm">
@@ -313,6 +363,7 @@ export default function OrdersPage() {
                             <div className="flex items-center gap-2">
                               <span className="text-[#FFF8E7] font-semibold text-sm">{order.supplier_name}</span>
                               <span className="text-[#FFF8E7]/50 text-xs">{order.items.length} item{order.items.length !== 1 ? 's' : ''}</span>
+                              <span className="text-[#FFF8E7]/50 text-xs">saved {new Date(order.updated_at).toLocaleDateString('en-GB')}</span>
                               <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${order.status === 'sent' ? 'bg-green-500/20 text-green-300' : 'bg-[#D4A24C]/20 text-[#D4A24C]'}`}>
                                 {order.status === 'sent' ? '✓ Sent' : '● Pending'}
                               </span>
@@ -358,7 +409,7 @@ export default function OrdersPage() {
       <ConfirmDialog
         open={!!deleteTarget}
         title="Delete Saved Order"
-        message={`Delete the saved order for "${deleteTarget?.supplier_name}" (week of ${deleteTarget?.week_start})?`}
+        message={`Delete the saved order for "${deleteTarget?.supplier_name}" (week of ${deleteTarget ? formatISODate(deleteTarget.week_start) : ''})?`}
         confirmLabel="Delete"
         danger
         onConfirm={handleDelete}

@@ -38,13 +38,20 @@ export default function AdminItemsPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: itemData }, { data: supData }] = await Promise.all([
+    try {
+      const [{ data: itemData, error: itemError }, { data: supData, error: supError }] = await Promise.all([
       supabase.from('items').select('*, suppliers(*)').order('name'),
       supabase.from('suppliers').select('*').order('display_order'),
-    ])
-    setItems((itemData ?? []) as ItemRow[])
-    setSuppliers((supData ?? []) as Supplier[])
-    setLoading(false)
+      ])
+      if (itemError) throw itemError
+      if (supError) throw supError
+      setItems((itemData ?? []) as ItemRow[])
+      setSuppliers((supData ?? []) as Supplier[])
+    } catch (e: any) {
+      addToast(e.message ?? 'Could not load admin items', 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -111,8 +118,13 @@ export default function AdminItemsPage() {
   }
 
   async function toggleActive(item: ItemRow) {
-    await supabase.from('items').update({ active: !item.active }).eq('id', item.id)
-    setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, active: !i.active } : i))
+    try {
+      const { error } = await supabase.from('items').update({ active: !item.active }).eq('id', item.id)
+      if (error) throw error
+      setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, active: !i.active } : i))
+    } catch (e: any) {
+      addToast(e.message ?? 'Could not update item status', 'error')
+    }
   }
 
   const filtered = useMemo(() => {
